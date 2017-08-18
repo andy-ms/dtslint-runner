@@ -1,0 +1,17 @@
+{
+    "extends": "tslint:all",
+    "rules": {
+        "arrow-parens": [true, "ban-single-arg-parens"],
+        "indent": [true, "tabs"],
+        "only-arrow-functions": [true, "allow-declarations"],
+        "typedef": [true, "call-signature"],
+
+        "completed-docs": false,
+        "member-ordering": false,
+        "newline-before-return": false,
+        "no-console": false,
+        "no-unused-variable": false,
+        "promise-function-async": false,
+        "type-literal-delimiter": false
+    }
+}
