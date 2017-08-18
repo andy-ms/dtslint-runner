@@ -1,18 +1,40 @@
+import assert = require("assert");
 import { exec } from "child_process";
 import { pathExists, readdir } from "fs-extra";
 import { join as joinPaths } from "path";
 
+const pathToDtsLint = require.resolve("dtslint");
+
 if (module.parent === null) { // tslint:disable-line no-null-keyword
-	const nProcesses = 8; // tslint:disable-line no-magic-numbers
-	main(nProcesses)
-		.then(code => { process.exit(code); } )
+	let onlyLint = false;
+	let nProcesses = 8; // tslint:disable-line no-magic-numbers
+	const { argv } = process;
+	for (let i = 2; i < argv.length; i++) {
+		const arg = argv[i];
+		switch (arg) {
+			case "--onlyLint": {
+				onlyLint = true;
+				break;
+			}
+			case "--nProcesses": {
+				i++;
+				assert(i < argv.length);
+				nProcesses = Number.parseInt(argv[i]);
+				assert(!Number.isNaN(nProcesses));
+				break;
+			}
+			default:
+				throw new Error(`Unexpected arg ${arg}`);
+		}
+	}
+
+	main(nProcesses, onlyLint)
+		.then(code => { process.exit(code); })
 		.catch(err => { console.error(err); });
 }
 
-const pathToDtsLint = require.resolve("dtslint");
-
-async function main(nProcesses: number): Promise<number> {
-	const installError = await run(pathToDtsLint, "--installAll");
+async function main(nProcesses: number, onlyLint: boolean): Promise<number> {
+	const installError = await run(/*cwd*/ undefined, pathToDtsLint, "--installAll");
 	if (installError !== undefined) {
 		return 1;
 	}
@@ -26,7 +48,7 @@ async function main(nProcesses: number): Promise<number> {
 	const packageNames = await readdir(typesDir);
 
 	const packageToErrors = await nAtATime(nProcesses, packageNames, async packageName =>
-		({ packageName, error: await testPackage(joinPaths(typesDir, packageName)) }));
+		({ packageName, error: await testPackage(joinPaths(typesDir, packageName), onlyLint) }));
 	const errors = packageToErrors.filter(({ error }) => error !== undefined) as
 		Array<{ packageName: string, error: string }>;
 
@@ -39,16 +61,21 @@ async function main(nProcesses: number): Promise<number> {
 		console.error(`  ${error.replace(/\n/g, "\n  ")}`);
 	}
 
+	console.error(`Failing packages: ${errors.map(e => e.packageName).join(", ")}`);
+
 	return 1;
 }
 
-async function testPackage(packagePath: string): Promise<string | undefined> {
+async function testPackage(packagePath: string, onlyLint: boolean): Promise<string | undefined> {
 	const shouldLint = await pathExists(joinPaths(packagePath, "tslint.json"));
+	if (onlyLint && !shouldLint) {
+		return undefined;
+	}
 	const args = shouldLint ? [] : ["--noLint"];
 	return run(packagePath, pathToDtsLint, ...args);
 }
 
-function run(cwd: string, cmd: string, ...args: string[]): Promise<string | undefined> {
+function run(cwd: string | undefined, cmd: string, ...args: string[]): Promise<string | undefined> {
 	const nodeCmd = `node ${cmd} ${args.join(" ")}`;
 	return new Promise<string | undefined>(resolve => {
 		exec(nodeCmd, { encoding: "utf8", cwd }, (error, stdout, stderr) => {
@@ -60,8 +87,8 @@ function run(cwd: string, cmd: string, ...args: string[]): Promise<string | unde
 			if (stderr !== "") {
 				console.error(stderr);
 			}
-			// tslint:disable-next-line strict-type-predicates (error may be undefined, node types are wrong)
-			resolve(error === undefined ? undefined : `${error.message}\n${stdout}\n${stderr}`);
+			// tslint:disable-next-line no-null-keyword
+			resolve(error === null ? undefined : `${error.message}\n${stdout}\n${stderr}`);
 		});
 	});
 }
