@@ -29,15 +29,20 @@ if (module.parent === null) { // tslint:disable-line no-null-keyword
 	}
 
 	main(nProcesses, onlyLint)
-		.then(code => { process.exit(code); })
+		.then(code => {
+			if (code !== 0) {
+				console.error("FAILED");
+			}
+			process.exit(code);
+		})
 		.catch(err => { console.error(err); });
 }
 
 async function main(nProcesses: number, onlyLint: boolean): Promise<number> {
-	const installError = await run(/*cwd*/ undefined, pathToDtsLint, "--installAll");
+	/*const installError = await run(/*cwd* / undefined, pathToDtsLint, "--installAll");
 	if (installError !== undefined) {
 		return 1;
-	}
+	}*/
 
 	const dtDir = joinPaths(process.cwd(), "..", "DefinitelyTyped");
 	if (!(await pathExists(dtDir))) {
@@ -47,12 +52,15 @@ async function main(nProcesses: number, onlyLint: boolean): Promise<number> {
 	const typesDir = joinPaths(dtDir, "types");
 	const packageNames = await readdir(typesDir);
 
-	const packageToErrors = await nAtATime(nProcesses, packageNames, async packageName =>
-		({ packageName, error: await testPackage(joinPaths(typesDir, packageName), onlyLint) }));
+	const packageToErrors = await nAtATime(nProcesses, packageNames, async packageName => {
+		console.log(packageName);
+		return ({ packageName, error: await testPackage(joinPaths(typesDir, packageName), onlyLint) })
+	});
 	const errors = packageToErrors.filter(({ error }) => error !== undefined) as
 		Array<{ packageName: string, error: string }>;
 
 	if (errors.length === 0) {
+		console.log("No errors");
 		return 0;
 	}
 
@@ -62,7 +70,6 @@ async function main(nProcesses: number, onlyLint: boolean): Promise<number> {
 	}
 
 	console.error(`Failing packages: ${errors.map(e => e.packageName).join(", ")}`);
-
 	return 1;
 }
 
@@ -72,7 +79,7 @@ async function testPackage(packagePath: string, onlyLint: boolean): Promise<stri
 		return undefined;
 	}
 	const args = shouldLint ? [] : ["--noLint"];
-	return run(packagePath, pathToDtsLint, ...args);
+	return await run(packagePath, pathToDtsLint, ...args);
 }
 
 function run(cwd: string | undefined, cmd: string, ...args: string[]): Promise<string | undefined> {
@@ -88,7 +95,17 @@ function run(cwd: string | undefined, cmd: string, ...args: string[]): Promise<s
 				console.error(stderr);
 			}
 			// tslint:disable-next-line no-null-keyword
-			resolve(error === null ? undefined : `${error.message}\n${stdout}\n${stderr}`);
+			if (error === null) {
+				if (stderr !== "") {
+					resolve(`${stdout}\n${stderr}`);
+				}
+				else {
+					resolve(undefined);
+				}
+			}
+			else {
+				resolve(error === null ? undefined : `${error.message}\n${stdout}\n${stderr}`);
+			}
 		});
 	});
 }
