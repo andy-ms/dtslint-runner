@@ -49,28 +49,44 @@ async function main(nProcesses: number, onlyLint: boolean): Promise<number> {
 		throw new Error("Should be run in a directory next to DefinitelyTyped");
 	}
 
-	const typesDir = joinPaths(dtDir, "types");
-	const packageNames = await readdir(typesDir);
+	const allPackages = await getAllPackages(dtDir);
 
-	const packageToErrors = await nAtATime(nProcesses, packageNames, async packageName => {
-		console.log(packageName);
-		return ({ packageName, error: await testPackage(joinPaths(typesDir, packageName), onlyLint) })
+	const packageToErrors = await nAtATime(nProcesses, allPackages, async ({ name, path }) => {
+		console.log(name);
+		return { name, error: await testPackage(path, onlyLint) };
 	});
 	const errors = packageToErrors.filter(({ error }) => error !== undefined) as
-		Array<{ packageName: string, error: string }>;
+		Array<{ name: string, error: string }>;
 
 	if (errors.length === 0) {
 		console.log("No errors");
 		return 0;
 	}
 
-	for (const { packageName, error } of errors) {
-		console.error(packageName);
+	for (const { name, error } of errors) {
+		console.error(name);
 		console.error(`  ${error.replace(/\n/g, "\n  ")}`);
 	}
 
-	console.error(`Failing packages: ${errors.map(e => e.packageName).join(", ")}`);
+	console.error(`Failing packages: ${errors.map(e => e.name).join(", ")}`);
 	return 1;
+}
+
+async function getAllPackages(dtDir: string): Promise<Array<{ name: string, path: string }>> {
+	const typesDir = joinPaths(dtDir, "types");
+	const packageNames = await readdir(typesDir);
+	const results = await nAtATime(1, packageNames, async packageName => {
+		const packageDir = joinPaths(typesDir, packageName);
+		const files = await readdir(packageDir);
+		const packages = [{ name: packageName, path: packageDir }];
+		for (const file of files) {
+			if (/^v\d+$/.test(file)) {
+				packages.push({ name: `${packageName}/${file}`, path: joinPaths(packageDir, file) });
+			}
+		}
+		return packages;
+	});
+	return ([] as Array<{ name: string, path: string }>).concat(...results);
 }
 
 async function testPackage(packagePath: string, onlyLint: boolean): Promise<string | undefined> {
@@ -94,7 +110,7 @@ function run(cwd: string | undefined, cmd: string, ...args: string[]): Promise<s
 			if (stderr !== "") {
 				console.error(stderr);
 			}
-			// tslint:disable-next-line no-null-keyword
+			// tslint:disable-next-line no-null-keyword strict-type-predicates
 			if (error === null) {
 				if (stderr !== "") {
 					resolve(`${stdout}\n${stderr}`);
