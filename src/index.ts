@@ -114,13 +114,11 @@ function run(cwd: string | undefined, cmd: string, ...args: string[]): Promise<s
 			if (error === null) {
 				if (stderr !== "") {
 					resolve(`${stdout}\n${stderr}`);
-				}
-				else {
+				} else {
 					resolve(undefined);
 				}
-			}
-			else {
-				resolve(error === null ? undefined : `${error.message}\n${stdout}\n${stderr}`);
+			} else {
+				resolve(`${error.message}\n${stdout}\n${stderr}`);
 			}
 		});
 	});
