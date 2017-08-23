@@ -72,6 +72,63 @@ async function main(nProcesses: number, onlyLint: boolean): Promise<number> {
 	return 1;
 }
 
+const exclude = new Set<string>([
+	"webrtc",
+	"webspeechapi",
+	"whatwg-streams",
+	"tinymce",
+	"transducers-js",
+	"skyway",
+	"react-router/v3",
+	"react-dom",
+	"react/v15",
+	"q/v0",
+	"pngjs2",
+	"peerjs",
+	"oibackoff",
+	"leaflet-draw",
+	"kendo-ui",
+	"i18next/v2",
+
+	// https://github.com/Microsoft/dtslint/pull/61
+	"jquery",
+
+	// https://github.com/reactjs/redux/pull/2530
+	"redux-form",
+	"redux-first-router",
+	"redux-mock-store",
+	"redux-pack",
+
+	"fs-extra",
+	"koa-generic-session",
+	"bluebird",
+	"xadesjs",
+	"bufferstream",
+	"split",
+	"n3",
+
+	// Have PRs, waiting for merge
+	"angular",
+	"gulp",
+	"i18next",
+	"pad",
+	"jasminewd2",
+	"webcomponents.js",
+	"webpack",
+	"redux-batched-subscribe",
+	"redux-actions",
+	"redux-action",
+	"react-native-goby",
+	"react-app",
+	"ramda",
+	"baidumap-web-sdk",
+	"selenium-webdriver",
+	"react-virtualized-select",
+	"sencha_touch",
+	"mithril",
+	"ej.web.all",
+]);
+
 async function getAllPackages(dtDir: string): Promise<Array<{ name: string, path: string }>> {
 	const typesDir = joinPaths(dtDir, "types");
 	const packageNames = await readdir(typesDir);
@@ -81,7 +138,10 @@ async function getAllPackages(dtDir: string): Promise<Array<{ name: string, path
 		const packages = [{ name: packageName, path: packageDir }];
 		for (const file of files) {
 			if (/^v\d+$/.test(file)) {
-				packages.push({ name: `${packageName}/${file}`, path: joinPaths(packageDir, file) });
+				const name = `${packageName}/${file}`;
+				if (!exclude.has(name)) {
+					packages.push({ name, path: joinPaths(packageDir, file) });
+				}
 			}
 		}
 		return packages;
